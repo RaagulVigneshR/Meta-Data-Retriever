@@ -2,9 +2,11 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
 import csv
+import webbrowser
 from PIL import Image
 from core.exif import Exif
 from core.configs import Config
+import folium
 
 class ExifViewerApp:
     def __init__(self, master):
@@ -34,6 +36,11 @@ class ExifViewerApp:
         self.select_file_button = tk.Button(self.master, text="Select Image File", command=self.process_image, font=('Arial', 12))
         self.select_file_button.pack(pady=10)
 
+        # Map display button
+        self.open_map_button = tk.Button(self.master, text="Open Map", command=self.open_map, font=('Arial', 12))
+        self.open_map_button.pack(pady=5)
+        self.open_map_button.config(state=tk.DISABLED)  # Initially disabled
+
         # Metadata display text widget
         self.metadata_text = tk.Text(self.master, width=40, height=10, font=('Arial', 12))
         self.metadata_text.pack(pady=10)
@@ -51,7 +58,7 @@ class ExifViewerApp:
 
     def process_image(self):
         option = self.option_var.get()
-        filename = filedialog.askopenfilename(initialdir="/", title="Select a File", filetypes=(("All files", "*.*"), ("all files", "*.*")))
+        filename = filedialog.askopenfilename(initialdir="D:/8th SEM/ProActive cloud security Threat Mitigation/EXIF HEIST/images", title="Select a File", filetypes=(("All files", "*.*"), ("all files", "*.*")))
         if filename:
             image_path = filename
             exif = Exif()
@@ -64,13 +71,36 @@ class ExifViewerApp:
                 # View metadata
                 self.display_metadata(exif_data)
 
-            elif option == "2":
-                # Delete metadata
-                new_path = self.remove_metadata(image_path)
-                save_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=(("PNG files", "*.png"), ("All files", "*.*")))
-                if save_path:
-                    os.rename(new_path, save_path)
-                    messagebox.showinfo("Info", f"Image saved without metadata at: {save_path}")
+                # Enable the map button if GPS data is available
+                if 'GPSInfo' in exif_data:
+                    self.open_map_button.config(state=tk.NORMAL)
+                else:
+                    self.open_map_button.config(state=tk.DISABLED)
+
+    def open_map(self):
+        filename = filedialog.askopenfilename(initialdir="D:/8th SEM/ProActive cloud security Threat Mitigation/EXIF HEIST/images", title="Select a File", filetypes=(("All files", "*.*"), ("all files", "*.*")))
+        if filename:
+            image_path = filename
+            exif = Exif()
+            exif_data = exif.extract_data(image_path)
+            if 'GPSInfo' in exif_data:
+                gps_info = exif_data['GPSInfo']
+                if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
+                    latitude = gps_info['GPSLatitude']
+                    longitude = gps_info['GPSLongitude']
+                    
+                    # Create a map centered at the GPS coordinates
+                    map_obj = folium.Map(location=[latitude, longitude], zoom_start=15)
+
+                    # Add a marker for the GPS coordinates
+                    folium.Marker(location=[latitude, longitude], popup='Image Location').add_to(map_obj)
+
+                    # Save the map to an HTML file
+                    map_file = os.path.splitext(image_path)[0] + "_map.html"
+                    map_obj.save(map_file)
+
+                    # Open the map in the default web browser
+                    webbrowser.open('file://' + os.path.realpath(map_file))
 
     def display_metadata(self, exif_data):
         self.metadata_text.delete(1.0, tk.END)  # Clear previous content
@@ -84,20 +114,6 @@ class ExifViewerApp:
             with open(save_path, "w", newline="") as f:
                 f.write(metadata)
             messagebox.showinfo("Info", f"Metadata saved to CSV file: {save_path}")
-
-    def remove_metadata(self, image_path):
-        # Open the image using PIL
-        image = Image.open(image_path)
-        
-        # Create a copy of the image without metadata
-        image_without_metadata = Image.new(image.mode, image.size)
-        image_without_metadata.putdata(list(image.getdata()))
-        
-        # Save the image without metadata to a new file
-        new_path = os.path.splitext(image_path)[0] + "_without_metadata" + os.path.splitext(image_path)[1]
-        image_without_metadata.save(new_path)
-        
-        return new_path
 
     def quit_app(self):
         self.on_close()
