@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EXIF Data Viewer</title>
+</head>
+<body>
+    <h1>EXIF Data Viewer</h1>
+    <form action="/process_image" method="post">
+        <label for="image_path">Image Path:</label><br>
+        <input type="text" id="image_path" name="image_path"><br>
+        <input type="radio" id="option1" name="option" value="1" checked>
+        <label for="option1">View Metadata</label><br>
+        <input type="radio" id="option2" name="option" value="2">
+        <label for="option2">Delete Metadata</label><br>
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>
