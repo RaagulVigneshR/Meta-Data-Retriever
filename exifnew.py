@@ -1,9 +1,9 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import os
 import csv
 import webbrowser
-from PIL import Image
+from PIL import Image, ImageTk
 from core.exif import Exif
 from core.configs import Config
 import folium
@@ -12,108 +12,206 @@ class ExifViewerApp:
     def __init__(self, master):
         self.master = master
         self.master.title("EXIF Data Viewer")
+        self.master.geometry("600x400")
 
         self.option_var = tk.StringVar()
         self.option_var.set("1")  # Default option
 
+        # Menu Bar
+        self.create_menu_bar()
+
+        # Create a notebook (tabbed interface)
+        self.notebook = ttk.Notebook(self.master)
+        self.notebook.pack(expand=True, fill=tk.BOTH)
+
+        # Add tabs
+        self.tab_view = ttk.Frame(self.notebook)
+        self.tab_edit = ttk.Frame(self.notebook)
+        self.tab_view.pack(fill=tk.BOTH)
+        self.tab_edit.pack(fill=tk.BOTH)
+        self.notebook.add(self.tab_view, text='View')
+        self.notebook.add(self.tab_edit, text='Edit')
+
+        # View tab
+        self.create_view_tab()
+
+        # Edit tab
+        self.create_edit_tab()
+
+    def create_menu_bar(self):
+        menubar = tk.Menu(self.master)
+
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Open", command=self.open_file)
+        file_menu.add_command(label="Save", command=self.save_metadata)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit_app)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="About", command=self.show_about)
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        self.master.config(menu=menubar)
+
+    def create_view_tab(self):
+        # View tab layout
+        view_frame = tk.Frame(self.tab_view)
+        view_frame.pack(padx=10, pady=10)
+
         # Banner
-        self.banner_label = tk.Label(self.master, text=Config.banner(), font=('Arial', 14))
-        self.banner_label.pack(pady=10)
+        banner_label = tk.Label(view_frame, text="EXIF Data Viewer", font=('Arial', 16, 'bold'))
+        banner_label.pack(pady=10)
 
-        # Option selection frame
-        self.option_frame = tk.Frame(self.master)
-        self.option_frame.pack(pady=10)
+        # Option selection
+        option_frame = tk.Frame(view_frame)
+        option_frame.pack(pady=10)
 
-        tk.Label(self.option_frame, text="Select an option:", font=('Arial', 12)).grid(row=0, column=0, padx=5, pady=5)
+        tk.Label(option_frame, text="Select an option:", font=('Arial', 12)).grid(row=0, column=0, padx=5, pady=5)
 
-        self.view_radio = tk.Radiobutton(self.option_frame, text="View Metadata", variable=self.option_var, value="1", font=('Arial', 12))
-        self.view_radio.grid(row=0, column=1, padx=5, pady=5)
+        view_radio = tk.Radiobutton(option_frame, text="View Metadata", variable=self.option_var, value="1", font=('Arial', 12))
+        view_radio.grid(row=0, column=1, padx=5, pady=5)
 
-        self.delete_radio = tk.Radiobutton(self.option_frame, text="Delete Metadata", variable=self.option_var, value="2", font=('Arial', 12))
-        self.delete_radio.grid(row=0, column=2, padx=5, pady=5)
+        # File selection
+        select_file_button = tk.Button(view_frame, text="Select Image File", command=self.process_image_view, font=('Arial', 12))
+        select_file_button.pack(pady=10)
 
-        # File selection button
-        self.select_file_button = tk.Button(self.master, text="Select Image File", command=self.process_image, font=('Arial', 12))
-        self.select_file_button.pack(pady=10)
+        # Thumbnail preview
+        self.thumbnail_label = tk.Label(view_frame)
+        self.thumbnail_label.pack()
 
-        # Map display button
-        self.open_map_button = tk.Button(self.master, text="Open Map", command=self.open_map, font=('Arial', 12))
-        self.open_map_button.pack(pady=5)
-        self.open_map_button.config(state=tk.DISABLED)  # Initially disabled
+        # Image information
+        self.info_label = tk.Label(view_frame, font=('Arial', 12))
+        self.info_label.pack()
 
-        # Metadata display text widget
-        self.metadata_text = tk.Text(self.master, width=40, height=10, font=('Arial', 12))
-        self.metadata_text.pack(pady=10)
+        # Metadata display
+        metadata_frame = tk.Frame(view_frame)
+        metadata_frame.pack(pady=10)
+
+        tk.Label(metadata_frame, text="Metadata:", font=('Arial', 12)).pack()
+        self.metadata_text = tk.Text(metadata_frame, width=40, height=10, font=('Arial', 12))
+        self.metadata_text.pack()
+
+    def create_edit_tab(self):
+        # Edit tab layout
+        edit_frame = tk.Frame(self.tab_edit)
+        edit_frame.pack(padx=10, pady=10)
+
+        # Banner
+        banner_label = tk.Label(edit_frame, text="EXIF Data Editor", font=('Arial', 16, 'bold'))
+        banner_label.pack(pady=10)
+
+        # Option selection
+        option_frame = tk.Frame(edit_frame)
+        option_frame.pack(pady=10)
+
+        tk.Label(option_frame, text="Select an option:", font=('Arial', 12)).grid(row=0, column=0, padx=5, pady=5)
+
+        edit_radio = tk.Radiobutton(option_frame, text="Edit Metadata", variable=self.option_var, value="2", font=('Arial', 12))
+        edit_radio.grid(row=0, column=1, padx=5, pady=5)
+
+        # Custom field entry
+        self.custom_field_label = tk.Label(edit_frame, text="Custom Field:", font=('Arial', 12))
+        self.custom_field_label.pack(pady=5)
+
+        self.custom_field_entry = tk.Entry(edit_frame, font=('Arial', 12))
+        self.custom_field_entry.pack(pady=5)
+
+        # File selection
+        select_file_button = tk.Button(edit_frame, text="Select Image File", command=self.process_image_edit, font=('Arial', 12))
+        select_file_button.pack(pady=10)
+
+        # Metadata display
+        metadata_frame = tk.Frame(edit_frame)
+        metadata_frame.pack(pady=10)
+
+        tk.Label(metadata_frame, text="Metadata:", font=('Arial', 12)).pack()
+        self.metadata_text_edit = tk.Text(metadata_frame, width=40, height=10, font=('Arial', 12))
+        self.metadata_text_edit.pack()
 
         # Save metadata button
-        self.save_button = tk.Button(self.master, text="Save Metadata", command=self.save_metadata, font=('Arial', 12))
-        self.save_button.pack(pady=5)
+        save_button = tk.Button(edit_frame, text="Save Metadata", command=self.save_metadata, font=('Arial', 12))
+        save_button.pack(pady=5)
 
-        # Quit button
-        self.quit_button = tk.Button(self.master, text="Quit", command=self.quit_app, font=('Arial', 12))
-        self.quit_button.pack(pady=10)
+        # Delete metadata button
+        delete_button = tk.Button(edit_frame, text="Delete Metadata", command=self.delete_metadata, font=('Arial', 12))
+        delete_button.pack(pady=5)
 
-        # Bind closing event of the window
-        self.master.protocol("WM_DELETE_WINDOW", self.on_close)
-
-    def process_image(self):
-        option = self.option_var.get()
-        filename = filedialog.askopenfilename(initialdir="D:/8th SEM/ProActive cloud security Threat Mitigation/EXIF HEIST/images", title="Select a File", filetypes=(("All files", "*.*"), ("all files", "*.*")))
+    def process_image_view(self):
+        filename = filedialog.askopenfilename(initialdir=".", title="Select an Image File", filetypes=(("Image files", "*.jpg;*.jpeg;*.png;*.gif"), ("All files", "*.*")))
         if filename:
-            image_path = filename
+            self.image_path = filename
             exif = Exif()
-            exif_data = exif.extract_data(image_path)
-            if not exif_data:
-                messagebox.showinfo("Info", f"No Exif data found in '{image_path}'")
+            self.exif_data = exif.extract_data(self.image_path)
+            if not self.exif_data:
+                messagebox.showinfo("Info", f"No EXIF data found in '{self.image_path}'")
                 return
+            self.display_image_info()
+            self.display_thumbnail()
+            self.display_metadata_view()
 
-            if option == "1":
-                # View metadata
-                self.display_metadata(exif_data)
+    def display_image_info(self):
+        image = Image.open(self.image_path)
+        width, height = image.size
+        self.info_label.config(text=f"Size: {width}x{height}, Format: {image.format}")
 
-                # Enable the map button if GPS data is available
-                if 'GPSInfo' in exif_data:
-                    self.open_map_button.config(state=tk.NORMAL)
-                else:
-                    self.open_map_button.config(state=tk.DISABLED)
+    def display_thumbnail(self):
+        image = Image.open(self.image_path)
+        image.thumbnail((150, 150))
+        photo = ImageTk.PhotoImage(image)
+        self.thumbnail_label.config(image=photo)
+        self.thumbnail_label.image = photo
 
-    def open_map(self):
-        filename = filedialog.askopenfilename(initialdir="D:/8th SEM/ProActive cloud security Threat Mitigation/EXIF HEIST/images", title="Select a File", filetypes=(("All files", "*.*"), ("all files", "*.*")))
-        if filename:
-            image_path = filename
-            exif = Exif()
-            exif_data = exif.extract_data(image_path)
-            if 'GPSInfo' in exif_data:
-                gps_info = exif_data['GPSInfo']
-                if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
-                    latitude = gps_info['GPSLatitude']
-                    longitude = gps_info['GPSLongitude']
-                    
-                    # Create a map centered at the GPS coordinates
-                    map_obj = folium.Map(location=[latitude, longitude], zoom_start=15)
-
-                    # Add a marker for the GPS coordinates
-                    folium.Marker(location=[latitude, longitude], popup='Image Location').add_to(map_obj)
-
-                    # Save the map to an HTML file
-                    map_file = os.path.splitext(image_path)[0] + "_map.html"
-                    map_obj.save(map_file)
-
-                    # Open the map in the default web browser
-                    webbrowser.open('file://' + os.path.realpath(map_file))
-
-    def display_metadata(self, exif_data):
+    def display_metadata_view(self):
         self.metadata_text.delete(1.0, tk.END)  # Clear previous content
-        for key, value in exif_data.items():
+        for key, value in self.exif_data.items():
             self.metadata_text.insert(tk.END, f"{key}: {value}\n")
 
+    def process_image_edit(self):
+        filename = filedialog.askopenfilename(initialdir=".", title="Select an Image File", filetypes=(("Image files", "*.jpg;*.jpeg;*.png;*.gif"), ("All files", "*.*")))
+        if filename:
+            self.image_path = filename
+            exif = Exif()
+            self.exif_data = exif.extract_data(self.image_path)
+            if not self.exif_data:
+                messagebox.showinfo("Info", f"No EXIF data found in '{self.image_path}'")
+                return
+            self.display_metadata_edit()
+
+    def display_metadata_edit(self):
+        self.metadata_text_edit.delete(1.0, tk.END)  # Clear previous content
+        for key, value in self.exif_data.items():
+            self.metadata_text_edit.insert(tk.END, f"{key}: {value}\n")
+        # If CustomField is present, display it for editing
+        if 'CustomField' in self.exif_data:
+            custom_field_value = self.exif_data['CustomField']
+            self.custom_field_entry.delete(0, tk.END)
+            self.custom_field_entry.insert(0, custom_field_value.decode('utf-8'))
+
     def save_metadata(self):
-        metadata = self.metadata_text.get(1.0, tk.END)
+        metadata = self.metadata_text_edit.get(1.0, tk.END)
+        custom_field = self.custom_field_entry.get()
+        # Update CustomField in the EXIF data
+        self.exif_data['CustomField'] = custom_field.encode('utf-8')
+
+        # Save metadata to the image
+        exif = Exif()
+        exif.save_data(self.image_path, self.exif_data)
+
+        # Save metadata to a CSV file
         save_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=(("CSV files", "*.csv"), ("All files", "*.*")))
         if save_path:
             with open(save_path, "w", newline="") as f:
                 f.write(metadata)
             messagebox.showinfo("Info", f"Metadata saved to CSV file: {save_path}")
+
+    def delete_metadata(self):
+        self.metadata_text_edit.delete(1.0, tk.END)  # Clear metadata text
+        self.custom_field_entry.delete(0, tk.END)     # Clear custom field entry
+        self.exif_data = {}  # Clear the metadata dictionary
+        messagebox.showinfo("Info", "Metadata deleted successfully")
 
     def quit_app(self):
         self.on_close()
@@ -121,6 +219,15 @@ class ExifViewerApp:
     def on_close(self):
         print("The application has been completed and aborted.")
         self.master.destroy()
+
+    def open_file(self):
+        filename = filedialog.askopenfilename(initialdir=".", title="Select a File", filetypes=(("All files", "*.*"), ("all files", "*.*")))
+        if filename:
+            
+            pass
+
+    def show_about(self):
+        messagebox.showinfo("About", "EXIF Data Viewer v1.0\nDeveloped by Raagul Vignesh")
 
 if __name__ == "__main__":
     root = tk.Tk()
